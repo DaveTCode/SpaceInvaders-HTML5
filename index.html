@@ -1,0 +1,49 @@
+<html>
+  <head>
+    <style>
+      .drawing-canvas {
+        border:none;
+      }
+    </style>
+    
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script src="space-invaders.js"></script>
+
+    <script>
+      $(document).ready(function() {
+        var data = new SpaceInvadersData();
+        data.loadTextures();
+
+        setTimeout(function() {
+          if (!data.loading) {
+            console.log("Completed loading data");
+            startGame(data);
+          }
+        }, 100);
+      });
+
+      function startGame(data) {
+        var model = new SpaceInvadersModel(data);
+
+        $(document).on("keydown", function(event) {
+          model.keys[event.which] = true;
+        });
+        $(document).on("keyup", function(event) {
+          model.keys[event.which] = false;
+        });
+        var renderer = new SpaceInvadersRenderer($("#output")[0], data);
+
+        renderer.timer = setInterval(function() {
+          renderer.render(model);
+        }, (1 / SpaceInvadersData.fps) * 1000);
+
+        model.timer = setInterval(function() {
+          model.update();
+        }, (1 / SpaceInvadersData.mups) * 1000);
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="output" class="drawing-canvas" width="800" height="600"></canvas>
+  </body>
+</html>
