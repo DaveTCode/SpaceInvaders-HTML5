@@ -15,7 +15,11 @@ var SpaceInvadersData = function() {
     row_padding: 16,
     side_padding: 10,
     fps: 60,
-    mups: 30
+    mups: 30,
+    score: {
+      position_x: 20,
+      position_y: 42
+    }
   };
 
   data.ms_per_frame = (1 / data.fps) * 1000;
@@ -45,7 +49,8 @@ var SpaceInvadersData = function() {
   data.bullet = {
     width: 8,
     height: 30,
-    speed_y_ms: 0.075
+    speed_y_ms: 0.075,
+    cost: 2
   };
 
   data.cannon = {
@@ -67,14 +72,17 @@ var SpaceInvadersData = function() {
     start_x: data.width - data.alien_matrix[0].length * data.column_width,
 
     1: {
+      score: 30,
       animation: [data.texture_map.alien1_1,
                   data.texture_map.alien1_2]
     },
     2: {
+      score: 15,
       animation: [data.texture_map.alien2_1,
                   data.texture_map.alien2_2]
     },
     3: {
+      score: 10,
       animation: [data.texture_map.alien3_1,
                   data.texture_map.alien3_2]
     }
@@ -160,6 +168,14 @@ SpaceInvadersRenderer = function(canvas, data) {
       });
     };
 
+    function renderScore(score) {
+      renderer.context.fillStyle = "white";
+      renderer.context.font = "bold 20px sans-serif";
+      renderer.context.fillText("Score: " + score, 
+                                renderer.scaling_factor * data.score.position_x, 
+                                renderer.scaling_factor * data.score.position_y);
+    };
+
     renderer.ms_since_animation_change += data.ms_per_frame;
     if (renderer.ms_since_animation_change > data.aliens.animation_length_ms) {
       renderer.ms_since_animation_change = 0;
@@ -176,6 +192,8 @@ SpaceInvadersRenderer = function(canvas, data) {
     if (model.bullet.active) {
       renderBullet(model.bullet);
     }
+
+    renderScore(model.score);
 
     if (model.keys[ESC_KEY]) {
       clearInterval(renderer.timer);
@@ -223,6 +241,28 @@ var SpaceInvadersModel = function(data) {
   };
 
   /**
+   * Called when a bullet hits an alien to ensure that the score is always
+   * incremented.
+   */
+  model.destroyAlien = function(row, col) {
+    model.score += data.aliens[data.alien_matrix[row][col]].score;
+    model.aliens.liveness[row][col] = false;
+  };
+
+  /**
+   * Called whenever the player fires a bullet to ensure that the cost is 
+   * taken into effect.
+   */
+  model.fireBullet = function() {
+    model.bullet.active = true;
+    model.bullet.x = model.cannon.x + data.cannon.bullet_offset_x;
+    model.bullet.y = model.cannon.y + data.cannon.bullet_offset_y;
+
+    model.score -= data.bullet.cost;
+    model.score = Math.max(0, model.score);
+  };
+
+  /**
    * Iterate over all aliens checking for collisions with the bullet.
    *
    * Flags the bullet as inactive and the alien as dead on collision.
@@ -242,7 +282,7 @@ var SpaceInvadersModel = function(data) {
           if (model.bullet.x + data.bullet.width > left && model.bullet.x < right &&
               model.bullet.y < bottom && model.bullet.y + data.bullet.height > top) { // Assumption that bullet is not longer than alien image.
             model.bullet.active = false;
-            model.aliens.liveness[row][col] = false;
+            model.destroyAlien(row, col);
             return; // Only allow a single alien to be destroyed by a single bullet.
           }
         }
@@ -268,9 +308,7 @@ var SpaceInvadersModel = function(data) {
      * Create the bullet if it doesn't already exist.
      */
     if (model.keys[SPACE_KEY] && !model.bullet.active) {
-      model.bullet.active = true;
-      model.bullet.x = model.cannon.x + data.cannon.bullet_offset_x;
-      model.bullet.y = model.cannon.y + data.cannon.bullet_offset_y;
+      model.fireBullet();
     }
 
     /*
