@@ -42,6 +42,12 @@ var SpaceInvadersData = function() {
     [3,3,3,3,3,3,3,3,3,3,3]
   ];
 
+  data.bullet = {
+    width: 8,
+    height: 30,
+    speed_y_ms: 0.075
+  };
+
   data.cannon = {
     start_x: (data.width - data.texture_map.cannon.width) / 2,
     start_y: data.height - 10 - data.texture_map.cannon.height,
@@ -49,7 +55,9 @@ var SpaceInvadersData = function() {
     width: data.texture_map.cannon.width,
     height: data.texture_map.cannon.height,
     alive: data.texture_map.cannon,
-    dead: data.texture_map.cannon_destroyed
+    dead: data.texture_map.cannon_destroyed,
+    bullet_offset_x: (data.texture_map.cannon.width - data.bullet.width) / 2,
+    bullet_offset_y: data.bullet.height * -1
   };
 
   data.aliens = {
@@ -123,6 +131,14 @@ SpaceInvadersRenderer = function(canvas, data) {
       };
     };
 
+    function renderBullet(bullet) {
+      renderer.context.fillStyle = "#ff0000";
+      renderer.context.fillRect(renderer.scaling_factor * bullet.x, 
+                                renderer.scaling_factor * bullet.y, 
+                                renderer.scaling_factor * data.bullet.width, 
+                                renderer.scaling_factor * data.bullet.height);
+    };
+
     function renderAliens(aliens) {
       function renderAlien(type, x, y) {
         var image = renderer.alien_animation_flipped ? data.aliens[type].animation[1] : data.aliens[type].animation[0];
@@ -157,6 +173,9 @@ SpaceInvadersRenderer = function(canvas, data) {
 
     renderCannon(model.cannon);
     renderAliens(model.aliens);
+    if (model.bullet.active) {
+      renderBullet(model.bullet);
+    }
 
     if (model.keys[ESC_KEY]) {
       clearInterval(renderer.timer);
@@ -167,7 +186,7 @@ SpaceInvadersRenderer = function(canvas, data) {
 };
 
 var SpaceInvadersModel = function(data) {
-  model = {
+  var model = {
     score: 0,
     lives: 3,
     keys: {
@@ -197,6 +216,40 @@ var SpaceInvadersModel = function(data) {
     ]
   };
 
+  model.bullet = {
+    active: false,
+    x: 0,
+    y: 0
+  };
+
+  /**
+   * Iterate over all aliens checking for collisions with the bullet.
+   *
+   * Flags the bullet as inactive and the alien as dead on collision.
+   */
+  model.checkBulletAlienCollisions = function() {
+    for (var row = 0; row < data.alien_matrix.length; row++) {
+      for (var col = 0; col < data.alien_matrix[row].length; col++) {
+        /*
+         * Only process for live aliens.
+         */
+        if (model.aliens.liveness[row][col]) {
+          var left = model.aliens.x + col * data.column_width + data.column_padding;
+          var right = left + data.column_width - data.column_padding;
+          var top = model.aliens.y + row * data.row_height + data.row_padding;
+          var bottom = top + data.row_height - data.row_padding;
+
+          if (model.bullet.x + data.bullet.width > left && model.bullet.x < right &&
+              model.bullet.y < bottom && model.bullet.y + data.bullet.height > top) { // Assumption that bullet is not longer than alien image.
+            model.bullet.active = false;
+            model.aliens.liveness[row][col] = false;
+            return; // Only allow a single alien to be destroyed by a single bullet.
+          }
+        }
+      }
+    }
+  };
+
   model.update = function() {
     /*
      * Move the cannon if the keys are being held down. Capped to the edge of
@@ -212,11 +265,35 @@ var SpaceInvadersModel = function(data) {
     model.cannon.x = Math.min(data.width - data.side_padding - data.cannon.width, Math.max(data.side_padding, model.cannon.x));
 
     /*
+     * Create the bullet if it doesn't already exist.
+     */
+    if (model.keys[SPACE_KEY] && !model.bullet.active) {
+      model.bullet.active = true;
+      model.bullet.x = model.cannon.x + data.cannon.bullet_offset_x;
+      model.bullet.y = model.cannon.y + data.cannon.bullet_offset_y;
+    }
+
+    /*
      * If the escape key is currently held down then kill the timer for the
      * model update so that this function doesn't get called again.
      */
     if (model.keys[ESC_KEY]) {
       clearInterval(model.timer);
+    }
+
+    /*
+     * Move the bullet up the screen and check to see whether it has collided 
+     * with anything.
+     */
+    if (model.bullet.active) {
+      model.bullet.y -= data.bullet.speed_y_ms * data.ms_per_model_update;
+
+      if (model.bullet.y <= 0) {
+        model.bullet.active = false;
+      }
+      else {
+        model.checkBulletAlienCollisions();
+      }
     }
 
     /*
